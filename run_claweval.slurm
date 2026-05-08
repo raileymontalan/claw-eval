@@ -102,6 +102,7 @@ free_port() { python3 -c "import socket; s=socket.socket(); s.bind(('',0)); p=s.
 MODEL=${MODEL:-"Qwen/Qwen3-32B"}
 MODEL_TP=${MODEL_TP:-"1"}
 MODEL_PORT=${MODEL_PORT:-$(free_port)}
+ENABLE_THINKING=${ENABLE_THINKING:-"true"}
 
 JUDGE_MODEL=${JUDGE_MODEL:-"openai/gpt-oss-120b"}
 JUDGE_TP=${JUDGE_TP:-"1"}
@@ -109,8 +110,7 @@ JUDGE_PORT=${JUDGE_PORT:-$(free_port)}
 
 PARALLEL=${PARALLEL:-"8"}
 TRIALS=${TRIALS:-"3"}
-FILTER_GENERAL=${FILTER_GENERAL:-"tasks/t"}
-FILTER_MULTI_TURN=${FILTER_MULTI_TURN:-"tasks/c"}
+LANGUAGE=${LANGUAGE:-"en"}
 OUTPUT_DIR=${OUTPUT_DIR:-"traces/$(echo ${MODEL} | awk -F/ '{print $NF}')"}
 
 # GPU UUID → index mapping
@@ -145,6 +145,11 @@ GPU0=${VISIBLE_DEVICES[0]:-0}
 GPU1=${VISIBLE_DEVICES[1]:-1}
 GPU2=${VISIBLE_DEVICES[2]:-2}
 
+THINKING_FLAG=""
+if [[ "$(echo "$ENABLE_THINKING" | tr '[:upper:]' '[:lower:]')" == "false" ]]; then
+    THINKING_FLAG="--chat-template-kwargs {\"enable_thinking\": false}"
+fi
+
 # Start agent model vLLM server
 echo "Starting agent vLLM server: ${MODEL} on port ${MODEL_PORT} (TP=${MODEL_TP})..."
 CUDA_VISIBLE_DEVICES=${GPU0} .venv/bin/vllm serve "${MODEL}" \
@@ -156,7 +161,8 @@ CUDA_VISIBLE_DEVICES=${GPU0} .venv/bin/vllm serve "${MODEL}" \
     --tool-call-parser hermes \
     --attention-backend FLASH_ATTN \
     --max-model-len 32768 \
-    --gpu-memory-utilization 0.85 &
+    --gpu-memory-utilization 0.85 \
+    ${THINKING_FLAG} &
 MODEL_PID=$!
 
 # Wait for agent model vLLM to be ready
@@ -209,31 +215,39 @@ PYEOF
 echo "Running claw-eval batch (general split: T* tasks)..."
 echo "  Model   : ${MODEL}"
 echo "  Judge   : ${JUDGE_MODEL}"
-echo "  Filter  : ${FILTER_GENERAL}"
+echo "  Language: ${LANGUAGE:-all}"
 echo "  Parallel: ${PARALLEL}  Trials: ${TRIALS}"
 echo "  Output  : ${OUTPUT_DIR}"
+
+LANGUAGE_ARGS=()
+if [ -n "${LANGUAGE}" ]; then
+    LANGUAGE_ARGS=("--language" "${LANGUAGE}")
+fi
 
 .venv/bin/claw-eval batch \
     --config config_qwen3_32b.yaml \
     --model "${MODEL}" \
-    --filter "${FILTER_GENERAL}" \
+    --filter "tasks/t" \
+    "${LANGUAGE_ARGS[@]}" \
     --parallel "${PARALLEL}" \
     --trials "${TRIALS}" \
-    --trace-dir "${OUTPUT_DIR}"
+    --trace-dir "${OUTPUT_DIR}" \
+    --continue "${OUTPUT_DIR}"
 
 EXIT_CODE_GENERAL=$?
 
 echo ""
 echo "Running claw-eval batch (multi_turn split: C* tasks)..."
-echo "  Filter  : ${FILTER_MULTI_TURN}"
 
 .venv/bin/claw-eval batch \
     --config config_qwen3_32b.yaml \
     --model "${MODEL}" \
-    --filter "${FILTER_MULTI_TURN}" \
+    --filter "tasks/c" \
+    "${LANGUAGE_ARGS[@]}" \
     --parallel "${PARALLEL}" \
     --trials "${TRIALS}" \
-    --trace-dir "${OUTPUT_DIR}"
+    --trace-dir "${OUTPUT_DIR}" \
+    --continue "${OUTPUT_DIR}"
 
 EXIT_CODE_MULTI=$?
 
@@ -250,5 +264,10 @@ fi
 echo "Shutting down vLLM servers..."
 kill "${MODEL_PID}" "${JUDGE_PID}" 2>/dev/null || true
 wait "${MODEL_PID}" "${JUDGE_PID}" 2>/dev/null || true
+
+# Print results summary
+echo ""
+echo "=== Results Summary ==="
+.venv/bin/python score_summary.py "${OUTPUT_DIR}" 2>/dev/null || true
 
 exit $EXIT_CODE

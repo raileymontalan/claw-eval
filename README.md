@@ -38,8 +38,11 @@ MODEL=aisingapore/Other-Model sbatch run_claweval.slurm
 # Fewer parallel workers and trials (faster, less robust)
 PARALLEL=4 TRIALS=1 sbatch run_claweval.slurm
 
-# General split only
-FILTER_MULTI_TURN="" sbatch run_claweval.slurm
+# Include Chinese tasks too
+LANGUAGE="" sbatch run_claweval.slurm
+
+# Chinese tasks only
+LANGUAGE=zh sbatch run_claweval.slurm
 ```
 
 | SLURM variable    | Default                    | Description                                              |
@@ -50,11 +53,10 @@ FILTER_MULTI_TURN="" sbatch run_claweval.slurm
 | `JUDGE_TP`        | `1`                        | Tensor parallel size for judge model                     |
 | `PARALLEL`        | `8`                        | Concurrent claw-eval workers                             |
 | `TRIALS`          | `3`                        | Independent trials per task (Pass^k metric)              |
-| `FILTER_GENERAL`  | `tasks/t`                  | Substring filter for general (T*) split                  |
-| `FILTER_MULTI_TURN` | `tasks/c`                | Substring filter for multi_turn (C*) split               |
+| `LANGUAGE`        | `en`                       | Filter tasks by prompt language (`en` or `zh`). Empty string runs all languages. Applies to both T and C splits. |
 | `OUTPUT_DIR`      | `traces/<model basename>`  | Trace output directory                                   |
 
-Traces are saved to `OUTPUT_DIR/`. Both splits write to the same directory so the final summary covers all 199 non-multimodal tasks.
+Traces are saved to `OUTPUT_DIR/`. Both splits write to the same directory so the final summary covers completed tasks. Re-runs use `--continue` to skip already-completed trials.
 
 ## Reference
 

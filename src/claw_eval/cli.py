@@ -1181,6 +1181,13 @@ def cmd_batch(args: argparse.Namespace) -> None:
                 filtered.append(d)
         task_dirs = filtered
 
+    if getattr(args, "language", None):
+        from .models.task import TaskDefinition as _TD
+        task_dirs = [
+            d for d in task_dirs
+            if _TD.from_yaml(Path(d) / "task.yaml").prompt.language == args.language
+        ]
+
     if getattr(args, "range", None):
         import re as _re
         _m = _re.match(r"(\d+)-(\d+)$", args.range)
@@ -1628,6 +1635,7 @@ def main(argv: list[str] | None = None) -> None:
     p_batch.add_argument("--tasks-dir", default="tasks", help="Tasks directory")
     p_batch.add_argument("--filter", default=None, help="Only run tasks matching this substring (e.g. 'en_' or 'T01')")
     p_batch.add_argument("--tag", default=None, help="Only run tasks with this tag (e.g. 'multimodal', 'general')")
+    p_batch.add_argument("--language", default=None, help="Only run tasks with this prompt language (e.g. 'en' or 'zh')")
     p_batch.add_argument("--range", default=None, help="Only run tasks in numeric ID range (e.g. '1-104')")
     p_batch.add_argument("--parallel", type=int, default=4, help="Number of parallel workers (default: 4)")
     p_batch.add_argument("--model", default=None)
