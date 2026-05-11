@@ -5,17 +5,6 @@ eval:
   language: en
   parallel: 8
   trials: 3
-judge:
-  api_key: dummy
-  base_url: http://localhost:54171/v1
-  enabled: true
-  model_id: gpt-oss-120b
-model:
-  api_key: dummy
-  base_url: http://localhost:33689/v1
-  context_window: 32768
-  model_id: Qwen/Qwen3.6-27B
-  temperature: 0.0
 models:
   Qwen/Qwen3-32B:
     enable_thinking: true
@@ -27,7 +16,19 @@ models:
     reasoning_parser: qwen3
     tool_call_parser: qwen3_coder
     tp: 1
+
+# Runtime sections — base_url and model_id are injected via env vars set by the SLURM script.
+# Values here are never hardcoded; the SLURM exports JUDGE_BASE_URL and JUDGE_NAME.
+model:
+  api_key: dummy
+  context_window: 32768
+  temperature: 0.0
+judge:
+  api_key: dummy
+  base_url: ${JUDGE_BASE_URL}
+  enabled: true
+  model_id: ${JUDGE_NAME}
 user_agent_model:
   api_key: dummy
-  base_url: http://localhost:54171/v1
-  model_id: gpt-oss-120b
+  base_url: ${JUDGE_BASE_URL}
+  model_id: ${JUDGE_NAME}

@@ -250,20 +250,11 @@ until curl -sf "http://localhost:${JUDGE_PORT}/health" > /dev/null 2>&1 && kill 
 done
 echo "Judge model vLLM server ready."
 
-# Rewrite config with actual dynamic ports and resolved model IDs
-python3 - <<PYEOF
-import yaml, pathlib
-cfg = yaml.safe_load(pathlib.Path('config_vllm.yaml').read_text())
-cfg['model']['base_url'] = 'http://localhost:${MODEL_PORT}/v1'
-cfg['model']['model_id'] = '${MODEL}'
-judge_name = '${JUDGE_MODEL}'.replace('openai/', '')
-cfg['judge']['base_url'] = 'http://localhost:${JUDGE_PORT}/v1'
-cfg['judge']['model_id'] = judge_name
-cfg['user_agent_model']['base_url'] = 'http://localhost:${JUDGE_PORT}/v1'
-cfg['user_agent_model']['model_id'] = judge_name
-pathlib.Path('config_vllm.yaml').write_text(yaml.dump(cfg, default_flow_style=False))
-print(f"Config updated: model={cfg['model']['model_id']} @ {cfg['model']['base_url']} | judge={cfg['judge']['model_id']} @ {cfg['judge']['base_url']}")
-PYEOF
+# Export env vars consumed by ${VAR} references in config_vllm.yaml
+JUDGE_NAME="$(echo "${JUDGE_MODEL}" | sed 's|openai/||')"
+export JUDGE_BASE_URL="http://localhost:${JUDGE_PORT}/v1"
+export JUDGE_NAME
+echo "Model: ${MODEL} @ http://localhost:${MODEL_PORT}/v1 | Judge: ${JUDGE_NAME} @ ${JUDGE_BASE_URL}"
 
 # Run claw-eval
 echo "Running claw-eval batch (general split: T* tasks)..."
@@ -278,15 +269,23 @@ if [ -n "${LANGUAGE}" ]; then
     LANGUAGE_ARGS=("--language" "${LANGUAGE}")
 fi
 
+CONTINUE_ARGS=()
+if [ -d "${OUTPUT_DIR}" ]; then
+    CONTINUE_ARGS=("--continue" "${OUTPUT_DIR}")
+fi
+
 .venv/bin/claw-eval batch \
     --config config_vllm.yaml \
     --model "${MODEL}" \
+    --api-key dummy \
+    --base-url "http://localhost:${MODEL_PORT}/v1" \
+    --judge-model "${JUDGE_NAME}" \
     --filter "tasks/t" \
     "${LANGUAGE_ARGS[@]}" \
     --parallel "${PARALLEL}" \
     --trials "${TRIALS}" \
     --trace-dir "${OUTPUT_DIR}" \
-    --continue "${OUTPUT_DIR}"
+    "${CONTINUE_ARGS[@]}"
 
 EXIT_CODE_GENERAL=$?
 
@@ -296,12 +295,15 @@ echo "Running claw-eval batch (multi_turn split: C* tasks)..."
 .venv/bin/claw-eval batch \
     --config config_vllm.yaml \
     --model "${MODEL}" \
+    --api-key dummy \
+    --base-url "http://localhost:${MODEL_PORT}/v1" \
+    --judge-model "${JUDGE_NAME}" \
     --filter "tasks/c" \
     "${LANGUAGE_ARGS[@]}" \
     --parallel "${PARALLEL}" \
     --trials "${TRIALS}" \
     --trace-dir "${OUTPUT_DIR}" \
-    --continue "${OUTPUT_DIR}"
+    "${CONTINUE_ARGS[@]}"
 
 EXIT_CODE_MULTI=$?
 
