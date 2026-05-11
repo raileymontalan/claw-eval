@@ -12,9 +12,11 @@ dependencies = [
 
 [project.optional-dependencies]
 vllm = [
-    "vllm==0.18.1",
-    "flashinfer-python",
-    "transformers>=4.56.0,<5",
+    "vllm==0.20.2",
+    "torch==2.11.0",
+    "torchaudio==2.11.0",
+    "torchvision==0.26.0",
+    "transformers>=5.6.0",
 ]
 mock = ["fastapi>=0.115", "uvicorn>=0.30", "pypdf", "trafilatura>=1.8", "requests>=2.28"]
 web = ["trafilatura>=1.8", "requests>=2.28"]
