@@ -2,7 +2,7 @@
 
 > **This is an internal AISG fork of [claw-eval/claw-eval](https://github.com/claw-eval/claw-eval) for evaluating locally-served models. It is not connected to the official Claw-Eval leaderboard and results are not submitted externally.**
 >
-> Default model under evaluation: [`Qwen/Qwen3-32B`](https://huggingface.co/Qwen/Qwen3-32B), served locally via vLLM. Judge and user-agent: [`openai/gpt-oss-120b`](https://huggingface.co/openai/gpt-oss-120b), also served locally.
+> Default model under evaluation: [`Qwen/Qwen3.6-27B`](https://huggingface.co/Qwen/Qwen3.6-27B), served locally via vLLM. Judge and user-agent: [`openai/gpt-oss-120b`](https://huggingface.co/openai/gpt-oss-120b), also served locally.
 
 Claw-Eval benchmarks autonomous agents on 300 human-verified real-world tasks across 9 categories. Agents are graded on completion, safety, and robustness (Pass^3 across 3 independent trials).
 
@@ -22,39 +22,38 @@ source .venv/bin/activate
 uv pip install -e ".[vllm]"
 ```
 
-Works with CUDA 12.4 (default driver on the cluster).
+Works with CUDA 13 (loaded automatically in the SLURM script).
 
 ### Running on SLURM
 
-For cluster jobs, use the provided script which handles vLLM startup, health-checking, config patching, and teardown:
+Use `submit_claweval.sh` to submit jobs. It reads model settings from `config_vllm.yaml` and automatically sets the correct GPU count:
 
 ```bash
-# Default run (Qwen3-32B, general + multi_turn splits, 3 trials)
-sbatch run_claweval.slurm
+# Default model (from config_vllm.yaml eval.default_model)
+./submit_claweval.sh
 
-# Different model
-MODEL=aisingapore/Other-Model sbatch run_claweval.slurm
+# Specific model
+./submit_claweval.sh Qwen/Qwen3-32B
 
-# Fewer parallel workers and trials (faster, less robust)
-PARALLEL=4 TRIALS=1 sbatch run_claweval.slurm
-
-# Include Chinese tasks too
-LANGUAGE="" sbatch run_claweval.slurm
+# Benchmark overrides via env vars
+PARALLEL=4 TRIALS=1 ./submit_claweval.sh Qwen/Qwen3.6-27B
 
 # Chinese tasks only
-LANGUAGE=zh sbatch run_claweval.slurm
+LANGUAGE=zh ./submit_claweval.sh
 ```
 
-| SLURM variable    | Default                    | Description                                              |
-| ----------------- | -------------------------- | -------------------------------------------------------- |
-| `MODEL`           | `Qwen/Qwen3-32B`           | HuggingFace model ID under evaluation                    |
-| `MODEL_TP`        | `1`                        | Tensor parallel size for agent model                     |
-| `JUDGE_MODEL`     | `openai/gpt-oss-120b`      | Judge + user-agent model (served locally on GPU 1)       |
-| `JUDGE_TP`        | `1`                        | Tensor parallel size for judge model                     |
-| `PARALLEL`        | `8`                        | Concurrent claw-eval workers                             |
-| `TRIALS`          | `3`                        | Independent trials per task (Pass^k metric)              |
-| `LANGUAGE`        | `en`                       | Filter tasks by prompt language (`en` or `zh`). Empty string runs all languages. Applies to both T and C splits. |
-| `OUTPUT_DIR`      | `traces/<model basename>`  | Trace output directory                                   |
+To add a new model, add an entry to `config_vllm.yaml` under `models:` with its `tp`, `enable_thinking`, `tool_call_parser`, and `reasoning_parser`. No SLURM changes needed.
+
+| Variable          | Default                        | Source                          | Description                                              |
+| ----------------- | ------------------------------ | ------------------------------- | -------------------------------------------------------- |
+| `MODEL`           | `Qwen/Qwen3.6-27B`             | `config_vllm.yaml` → submit arg | HuggingFace model ID under evaluation                    |
+| `MODEL_TP`        | `1`                            | `config_vllm.yaml models[MODEL].tp` | Tensor parallel size — set per model in config      |
+| `JUDGE_MODEL`     | `openai/gpt-oss-120b`          | `config_vllm.yaml eval.judge_model` | Judge + user-agent model                            |
+| `JUDGE_TP`        | `1`                            | `config_vllm.yaml eval.judge_tp` | Tensor parallel size for judge                         |
+| `PARALLEL`        | `8`                            | `config_vllm.yaml eval.parallel` | Concurrent claw-eval workers                           |
+| `TRIALS`          | `3`                            | `config_vllm.yaml eval.trials` | Independent trials per task (Pass^k metric)              |
+| `LANGUAGE`        | `en`                           | `config_vllm.yaml eval.language` | Filter by language (`en`/`zh`). Empty = all.           |
+| `OUTPUT_DIR`      | `traces/<model basename>`      | SLURM script                    | Trace output directory                                   |
 
 Traces are saved to `OUTPUT_DIR/`. Both splits write to the same directory so the final summary covers completed tasks. Re-runs use `--continue` to skip already-completed trials.
 

@@ -82,6 +82,9 @@
 set -euo pipefail
 cd $SLURM_SUBMIT_DIR
 
+module use "${MODULEFILES_PATH}"
+module swap cuda/13.0.3
+
 source .venv/bin/activate
 export PATH="$HOME/.local/bin:$PATH"
 
@@ -89,28 +92,71 @@ SITE_PACKAGES=$(.venv/bin/python -c 'import site; print(site.getsitepackages()[0
 export LD_LIBRARY_PATH="${SITE_PACKAGES}/nvidia/cudnn/lib:${SITE_PACKAGES}/nvidia/cusparselt/lib:${SITE_PACKAGES}/nvidia/nccl/lib:${SITE_PACKAGES}/nvidia/nvshmem/lib:${LD_LIBRARY_PATH:-}"
 export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
-if python3 -c "import flashinfer_cubin" 2>/dev/null; then
-    CUBIN_DIR=$(.venv/bin/python -c "import site; print(site.getsitepackages()[0])")/flashinfer_cubin
-    echo "Removing flashinfer_cubin to force JIT mode..."
-    rm -rf "${CUBIN_DIR}" "${CUBIN_DIR}"-*.dist-info 2>/dev/null || true
-fi
+# vLLM 0.20.2 bundles vllm.third_party.deep_gemm, making has_deep_gemm() return
+# True even when the backend is broken. Disabling via env var is the clean fix.
+export VLLM_USE_DEEP_GEMM=0
 
 mkdir -p logs
 
 free_port() { python3 -c "import socket; s=socket.socket(); s.bind(('',0)); p=s.getsockname()[1]; s.close(); print(p)"; }
 
-MODEL=${MODEL:-"Qwen/Qwen3-32B"}
-MODEL_TP=${MODEL_TP:-"1"}
-MODEL_PORT=${MODEL_PORT:-$(free_port)}
-ENABLE_THINKING=${ENABLE_THINKING:-"true"}
+# Resolve MODEL (env override > config default)
+MODEL="${MODEL:-}"
+if [ -z "${MODEL}" ]; then
+    MODEL=$(python3 -c "
+import yaml, pathlib
+print(yaml.safe_load(pathlib.Path('config_vllm.yaml').read_text()).get('eval', {}).get('default_model', ''))
+")
+fi
+if [ -z "${MODEL}" ]; then
+    echo "ERROR: MODEL not set and no default_model in config_vllm.yaml"
+    exit 1
+fi
 
-JUDGE_MODEL=${JUDGE_MODEL:-"openai/gpt-oss-120b"}
-JUDGE_TP=${JUDGE_TP:-"1"}
+# Load model-specific settings
+_model_vars=$(python3 - "$MODEL" <<'PYEOF'
+import yaml, pathlib, shlex, sys
+cfg = yaml.safe_load(pathlib.Path('config_vllm.yaml').read_text())
+model = sys.argv[1]
+models = cfg.get('models', {})
+if model not in models:
+    raise SystemExit(f"ERROR: Model '{model}' not found in config_vllm.yaml.\nAvailable: {list(models.keys())}")
+mcfg = models[model]
+print(f'_MODEL_TP={shlex.quote(str(mcfg.get("tp", 1)))}')
+thinking = mcfg.get("enable_thinking", True)
+print(f'_MODEL_THINKING={"true" if thinking else "false"}')
+print(f'_TOOL_CALL_PARSER={shlex.quote(str(mcfg.get("tool_call_parser", "")))}')
+print(f'_REASONING_PARSER={shlex.quote(str(mcfg.get("reasoning_parser", "")))}')
+PYEOF
+) || exit 1
+eval "$_model_vars"
+
+MODEL_TP=${MODEL_TP:-${_MODEL_TP:-"1"}}
+MODEL_PORT=${MODEL_PORT:-$(free_port)}
+ENABLE_THINKING=${ENABLE_THINKING:-${_MODEL_THINKING:-"true"}}
+TOOL_CALL_PARSER=${TOOL_CALL_PARSER:-${_TOOL_CALL_PARSER:-""}}
+REASONING_PARSER=${REASONING_PARSER:-${_REASONING_PARSER:-""}}
+
+# Load judge and eval defaults from config
+eval "$(python3 - <<'PYEOF'
+import yaml, pathlib, shlex
+cfg = yaml.safe_load(pathlib.Path('config_vllm.yaml').read_text())
+ecfg = cfg.get('eval', {})
+print(f'_JUDGE_MODEL={shlex.quote(str(ecfg.get("judge_model", "openai/gpt-oss-120b")))}')
+print(f'_JUDGE_TP={shlex.quote(str(ecfg.get("judge_tp", 1)))}')
+print(f'_PARALLEL={shlex.quote(str(ecfg.get("parallel", 8)))}')
+print(f'_TRIALS={shlex.quote(str(ecfg.get("trials", 3)))}')
+print(f'_LANGUAGE={shlex.quote(str(ecfg.get("language", "en")))}')
+PYEOF
+)"
+
+JUDGE_MODEL=${JUDGE_MODEL:-${_JUDGE_MODEL:-"openai/gpt-oss-120b"}}
+JUDGE_TP=${JUDGE_TP:-${_JUDGE_TP:-"1"}}
 JUDGE_PORT=${JUDGE_PORT:-$(free_port)}
 
-PARALLEL=${PARALLEL:-"8"}
-TRIALS=${TRIALS:-"3"}
-LANGUAGE=${LANGUAGE:-"en"}
+PARALLEL=${PARALLEL:-${_PARALLEL:-"8"}}
+TRIALS=${TRIALS:-${_TRIALS:-"3"}}
+LANGUAGE=${LANGUAGE:-${_LANGUAGE:-"en"}}
 OUTPUT_DIR=${OUTPUT_DIR:-"traces/$(echo ${MODEL} | awk -F/ '{print $NF}')"}
 
 # GPU UUID → index mapping
@@ -150,18 +196,24 @@ if [[ "$(echo "$ENABLE_THINKING" | tr '[:upper:]' '[:lower:]')" == "false" ]]; t
     THINKING_FLAG="--chat-template-kwargs {\"enable_thinking\": false}"
 fi
 
+REASONING_PARSER_FLAG=""
+if [ -n "${REASONING_PARSER}" ]; then
+    REASONING_PARSER_FLAG="--reasoning-parser ${REASONING_PARSER}"
+fi
+
 # Start agent model vLLM server
 echo "Starting agent vLLM server: ${MODEL} on port ${MODEL_PORT} (TP=${MODEL_TP})..."
 CUDA_VISIBLE_DEVICES=${GPU0} .venv/bin/vllm serve "${MODEL}" \
     --port "${MODEL_PORT}" \
     --tensor-parallel-size "${MODEL_TP}" \
     --dtype bfloat16 \
-    --enable-prefix-caching \
-    --enable-auto-tool-choice \
-    --tool-call-parser hermes \
-    --attention-backend FLASH_ATTN \
     --max-model-len 32768 \
     --gpu-memory-utilization 0.85 \
+    --attention-backend FLASH_ATTN \
+    --enable-prefix-caching \
+    --enable-auto-tool-choice \
+    --tool-call-parser "${TOOL_CALL_PARSER}" \
+    ${REASONING_PARSER_FLAG} \
     ${THINKING_FLAG} &
 MODEL_PID=$!
 
@@ -181,10 +233,10 @@ echo "Starting judge vLLM server: ${JUDGE_MODEL} on port ${JUDGE_PORT} (TP=${JUD
 CUDA_VISIBLE_DEVICES=${GPU1} .venv/bin/vllm serve "${JUDGE_MODEL}" \
     --port "${JUDGE_PORT}" \
     --tensor-parallel-size "${JUDGE_TP}" \
+    --served-model-name "$(echo ${JUDGE_MODEL} | sed 's|openai/||')" \
     --dtype bfloat16 \
-    --enable-prefix-caching \
     --max-model-len 32768 \
-    --served-model-name "$(echo ${JUDGE_MODEL} | sed 's|openai/||')" &
+    --enable-prefix-caching &
 JUDGE_PID=$!
 
 # Wait for judge model vLLM to be ready
@@ -198,17 +250,19 @@ until curl -sf "http://localhost:${JUDGE_PORT}/health" > /dev/null 2>&1 && kill 
 done
 echo "Judge model vLLM server ready."
 
-# Rewrite config with actual dynamic ports
+# Rewrite config with actual dynamic ports and resolved model IDs
 python3 - <<PYEOF
 import yaml, pathlib
-cfg = yaml.safe_load(pathlib.Path('config_qwen3_32b.yaml').read_text())
+cfg = yaml.safe_load(pathlib.Path('config_vllm.yaml').read_text())
 cfg['model']['base_url'] = 'http://localhost:${MODEL_PORT}/v1'
+cfg['model']['model_id'] = '${MODEL}'
+judge_name = '${JUDGE_MODEL}'.replace('openai/', '')
 cfg['judge']['base_url'] = 'http://localhost:${JUDGE_PORT}/v1'
-cfg['judge']['model_id'] = cfg['judge']['model_id'].replace('openai/', '')
+cfg['judge']['model_id'] = judge_name
 cfg['user_agent_model']['base_url'] = 'http://localhost:${JUDGE_PORT}/v1'
-cfg['user_agent_model']['model_id'] = cfg['user_agent_model']['model_id'].replace('openai/', '')
-pathlib.Path('config_qwen3_32b.yaml').write_text(yaml.dump(cfg, default_flow_style=False))
-print(f"Config updated: model={cfg['model']['base_url']} judge={cfg['judge']['base_url']} judge_model={cfg['judge']['model_id']}")
+cfg['user_agent_model']['model_id'] = judge_name
+pathlib.Path('config_vllm.yaml').write_text(yaml.dump(cfg, default_flow_style=False))
+print(f"Config updated: model={cfg['model']['model_id']} @ {cfg['model']['base_url']} | judge={cfg['judge']['model_id']} @ {cfg['judge']['base_url']}")
 PYEOF
 
 # Run claw-eval
@@ -225,7 +279,7 @@ if [ -n "${LANGUAGE}" ]; then
 fi
 
 .venv/bin/claw-eval batch \
-    --config config_qwen3_32b.yaml \
+    --config config_vllm.yaml \
     --model "${MODEL}" \
     --filter "tasks/t" \
     "${LANGUAGE_ARGS[@]}" \
@@ -240,7 +294,7 @@ echo ""
 echo "Running claw-eval batch (multi_turn split: C* tasks)..."
 
 .venv/bin/claw-eval batch \
-    --config config_qwen3_32b.yaml \
+    --config config_vllm.yaml \
     --model "${MODEL}" \
     --filter "tasks/c" \
     "${LANGUAGE_ARGS[@]}" \
