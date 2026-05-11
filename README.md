@@ -42,7 +42,18 @@ PARALLEL=4 TRIALS=1 ./submit_claweval.sh Qwen/Qwen3.6-27B
 LANGUAGE=zh ./submit_claweval.sh
 ```
 
-To add a new model, add an entry to `config_vllm.yaml` under `models:` with its `tp`, `enable_thinking`, `tool_call_parser`, and `reasoning_parser`. No SLURM changes needed.
+To add a new model, add an entry to `config_vllm.yaml` under `models:`:
+
+```yaml
+models:
+  Your/Model-Name:
+    tp: 1                        # number of GPUs (tensor parallel size)
+    enable_thinking: true        # false to disable thinking tokens
+    tool_call_parser: qwen3_coder  # vLLM tool call parser; check vLLM docs for your model
+    reasoning_parser: qwen3      # vLLM reasoning parser; omit or leave empty if not applicable
+```
+
+No SLURM changes needed. Submit with `./submit_claweval.sh Your/Model-Name`.
 
 | Variable          | Default                        | Source                          | Description                                              |
 | ----------------- | ------------------------------ | ------------------------------- | -------------------------------------------------------- |
@@ -56,6 +67,33 @@ To add a new model, add an entry to `config_vllm.yaml` under `models:` with its 
 | `OUTPUT_DIR`      | `traces/<model basename>`      | SLURM script                    | Trace output directory                                   |
 
 Traces are saved to `OUTPUT_DIR/`. Both splits write to the same directory so the final summary covers completed tasks. Re-runs use `--continue` to skip already-completed trials.
+
+## Results
+
+After the job finishes, the SLURM script runs `score_summary.py` on the trace directory. Output is printed to the job log and saved to `OUTPUT_DIR/score_summary.json`.
+
+**Console output:**
+
+```
+Found 1 models under traces/Qwen3.6-27B
+
+Model                          Tasks AvgScore │  AvgPass  AnyPass  AllPass
+─────────────────────────────────────────────────────────────────────────────────────
+Qwen3.6-27B                      199    0.723 │ 144/199  160/199  128/199
+```
+
+- **AvgScore** — mean task score across all trials (0–1)
+- **AvgPass** — tasks where the average score ≥ 0.75 (Pass^k denominator)
+- **AnyPass** — tasks where at least one trial passed (pass@1 optimistic)
+- **AllPass** — tasks where all trials passed (pass@k pessimistic)
+
+Tasks with fewer than 3 graded trials or error traces are listed separately as anomalies. Re-run them with `--continue` to fill in missing trials.
+
+To re-score manually:
+
+```bash
+.venv/bin/python score_summary.py traces/Qwen3.6-27B
+```
 
 ## Reference
 
