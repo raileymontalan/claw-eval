@@ -416,6 +416,12 @@ def main():
             f"{r['n_all_pass']:>3d}/{n:<3d}"
         )
 
+    print()
+    print(f"Pass@1 = tasks where ≥1 of {EXPECTED_TRIALS} trials scored ≥ {PASS_THRESHOLD}  (optimistic; upper bound on capability)")
+    print(f"Pass^1 = per-trial pass rate: total passing trials / (n_tasks × {EXPECTED_TRIALS})  (differs from Pass@1 when n_trials > 1)")
+    print(f"Pass^2 = tasks where ≥2 of {EXPECTED_TRIALS} trials passed")
+    print(f"Pass^3 = tasks where all {EXPECTED_TRIALS} trials passed  (strict reliability)")
+
     # ── Anomaly report ──
     has_anomaly = False
     port_offset = 0

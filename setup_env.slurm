@@ -16,6 +16,7 @@
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:1
 #SBATCH --time=02:00:00
+#SBATCH --nodelist=smc-pod-[14,8,5]
 #SBATCH --output=logs/setup_%j.out
 #SBATCH --error=logs/setup_%j.out
 
@@ -35,7 +36,7 @@ fi
 export PATH="$HOME/.local/bin:$PATH"
 
 echo "Creating venv and installing claw-eval + vLLM..."
-uv sync --extra vllm
+uv sync --extra vllm --extra mock
 
 echo ""
 echo "Verifying vLLM install..."

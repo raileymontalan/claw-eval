@@ -95,17 +95,15 @@ Scores below are for the general (T\*) split only — 105 tasks completed per mo
 
 Columns match the official [claw-eval leaderboard](https://claw-eval.github.io/) definitions. Models ordered alphabetically.
 
-Models ordered alphabetically. Pass@1 = ≥1 of 3 trials pass. Pass^2 = ≥2 of 3. Pass^3 = all 3 pass.
+| Model | Tasks | Avg Score | Completion | Robustness | Safety | Pass@1 | Pass^1 | Pass^2 | Pass^3 |
+|-------|:-----:|:---------:|:----------:|:----------:|:------:|:------:|:------:|:------:|:------:|
+| google/gemma-4-31B-it | 56\* | 0.514 | 0.528 | 0.897 | 0.959 | 19/56 (34%) | 0.262 | 15/56 (27%) | 10/56 (18%) |
+| google/gemma-4-E2B-it | 105 | 0.390 | 0.306 | 0.920 | **0.976** | 18/105 (17%) | 0.146 | 17/105 (16%) | 11/105 (10%) |
+| google/gemma-4-E4B-it | 105 | 0.330 | 0.232 | 0.906 | 0.969 | 9/105 (9%) | 0.073 | 7/105 (7%) | 7/105 (7%) |
+| Qwen/Qwen3.5-27B | 105 | 0.630 | 0.607 | 0.876 | 0.950 | 60/105 (57%) | 0.489 | 52/105 (50%) | 42/105 (40%) |
+| Qwen/Qwen3.6-27B | 105 | **0.649** | **0.613** | 0.918 | 0.958 | 62/105 (59%) | **0.521** | **55/105 (52%)** | **47/105 (45%)** |
 
-| Model | Tasks | Avg Score | Completion | Robustness | Safety | Pass@1 | Pass^2 | Pass^3 |
-|-------|:-----:|:---------:|:----------:|:----------:|:------:|:------:|:------:|:------:|
-| google/gemma-4-31B-it | 51* | 0.516* | 0.523* | 0.910* | 0.955* | 16/51 (31%) | 12/51 (24%) | 9/51 (18%) |
-| google/gemma-4-E2B-it | 105 | 0.390 | 0.306 | 0.920 | **0.976** | 18/105 (17%) | 17/105 (16%) | 11/105 (10%) |
-| google/gemma-4-E4B-it | 105 | 0.330 | 0.232 | 0.906 | 0.969 | 9/105 (9%) | 7/105 (7%) | 7/105 (7%) |
-| Qwen/Qwen3.5-27B | 105 | 0.630 | 0.607 | 0.876 | 0.950 | 60/105 (57%) | 52/105 (50%) | 42/105 (40%) |
-| Qwen/Qwen3.6-27B | 105 | **0.649** | **0.613** | 0.918 | 0.958 | 62/105 (59%) | **55/105 (52%)** | **47/105 (45%)** |
-
-\* gemma-4-31B-it incomplete (51/105 tasks). Re-run: `./submit_claweval.sh google/gemma-4-31B-it`
+\* gemma-4-31B-it incomplete (56/105 tasks). Re-run: `./submit_claweval.sh google/gemma-4-31B-it`
 
 Metric definitions (from the claw-eval paper):
 - **Avg Score** — mean task score across all 3 trials (0–1); missing trials padded with 0
@@ -113,6 +111,7 @@ Metric definitions (from the claw-eval paper):
 - **Robustness** — fraction of injected-error tool types that subsequently recovered (1.0 if no errors injected)
 - **Safety** — multiplicative gate penalising policy violations; avoidance of harmful/unauthorised actions
 - **Pass@1** — tasks where ≥1 of 3 trials scored ≥ 0.75 (optimistic; upper bound on capability)
+- **Pass^1** — per-trial pass rate: fraction of all task-trial pairs scoring ≥ 0.75
 - **Pass^2** — tasks where ≥2 of 3 trials scored ≥ 0.75
 - **Pass^3** — tasks where all 3 trials scored ≥ 0.75 (strict reliability; primary leaderboard metric)
 
