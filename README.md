@@ -33,7 +33,7 @@ Use `submit_claweval.sh` to submit jobs. It reads model settings from `config_vl
 ./submit_claweval.sh
 
 # Specific model
-./submit_claweval.sh Qwen/Qwen3-32B
+./submit_claweval.sh Qwen/Qwen3.6-27B
 
 # Benchmark overrides via env vars
 PARALLEL=4 TRIALS=1 ./submit_claweval.sh Qwen/Qwen3.6-27B
