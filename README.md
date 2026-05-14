@@ -117,6 +117,11 @@ Metric definitions (from the claw-eval paper):
 
 Tasks with fewer than 3 graded trials or error traces are listed as anomalies in the score_summary output. Re-run with `--continue` to fill in missing trials.
 
+> **Known limitation — officeqa tasks T074–T085 (context overflow):**
+> These 12 tasks pass large OCR documents (~778 KB / ~195K tokens for T085) as tool responses, exceeding the 131K–262K context limits of all evaluated models. Every trial fails with HTTP 400 context length exceeded. This is intentional — we do not truncate task inputs to stay close to the upstream evaluation design. These tasks are excluded from the scores above and will remain at 0 for all models until larger context windows are available.
+
+
+
 ## Reference
 
 Upstream leaderboard, dataset, contributor list, and citation info below — not used in this fork's evaluation setup.
