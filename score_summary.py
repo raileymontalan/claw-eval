@@ -468,16 +468,21 @@ def main():
             _rebuild_batch_files(r)
 
     # ── Save JSON ──
-    out_file = root / "score_summary.json"
-    json_results = []
+    # Per-model: write full task breakdown into each model's own trace directory.
     for r in all_results:
         jr = dict(r)
         jr["tasks"] = {}
         for tid, t in r["tasks"].items():
             td = dict(t)
-            td["errors"] = [{"file": f, "reason": r} for f, r in t["errors"]]
+            td["errors"] = [{"file": f, "reason": reason} for f, reason in t["errors"]]
             jr["tasks"][tid] = td
-        json_results.append(jr)
+        model_out = Path(r["trace_dir"]) / "score_summary.json"
+        with open(model_out, "w") as f:
+            json.dump(jr, f, indent=2, ensure_ascii=False)
+
+    # Root: write metrics only (no per-task breakdown) for a compact leaderboard file.
+    out_file = root / "score_summary.json"
+    json_results = [{k: v for k, v in r.items() if k != "tasks"} for r in all_results]
     with open(out_file, "w") as f:
         json.dump(json_results, f, indent=2, ensure_ascii=False)
     print(f"\n\nJSON saved to {out_file}")

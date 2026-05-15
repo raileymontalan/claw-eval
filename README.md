@@ -89,21 +89,20 @@ To re-score manually:
 .venv/bin/python score_summary.py traces/Qwen3.6-27B
 ```
 
-### AISG evaluation results (general split, T* tasks)
+### AISG evaluation results (T* general + C* multi-turn tasks)
 
-Scores below are for the general (T\*) split only — 105 tasks completed per model. Multi-turn (C\*) tasks write to the same trace directory; run `score_summary.py traces/<model>` to include them once complete.
-
-Columns match the official [claw-eval leaderboard](https://claw-eval.github.io/) definitions. Models ordered alphabetically.
+Columns match the official [claw-eval leaderboard](https://claw-eval.github.io/) definitions. Models ordered alphabetically. Candidate models are AISG internal variants of Qwen3.6-27B.
 
 | Model | Tasks | Avg Score | Completion | Robustness | Safety | Pass@1 | Pass^1 | Pass^2 | Pass^3 |
 |-------|:-----:|:---------:|:----------:|:----------:|:------:|:------:|:------:|:------:|:------:|
-| google/gemma-4-31B-it | 107 | 0.522 | 0.457 | 0.864 | 0.981| 32/107 (30%) | 0.252 | 27/107 (25%) | 22/107 (21%) |
-| google/gemma-4-E2B-it | 105 | 0.390 | 0.306 | 0.920 | **0.976** | 18/105 (17%) | 0.146 | 17/105 (16%) | 11/105 (10%) |
-| google/gemma-4-E4B-it | 105 | 0.330 | 0.232 | 0.906 | 0.969 | 9/105 (9%) | 0.073 | 7/105 (7%) | 7/105 (7%) |
-| Qwen/Qwen3.5-27B | 105 | 0.630 | 0.607 | 0.876 | 0.950 | 60/105 (57%) | 0.489 | 52/105 (50%) | 42/105 (40%) |
-| Qwen/Qwen3.6-27B | 105 | **0.649** | **0.613** | 0.918 | 0.958 | 62/105 (59%) | **0.521** | **55/105 (52%)** | **47/105 (45%)** |
-
-\* gemma-4-31B-it incomplete (56/105 tasks). Re-run: `./submit_claweval.sh google/gemma-4-31B-it`
+| google/gemma-4-31B-it | 107 | 0.522 | 0.457 | 0.864 | **0.981** | 32/107 (30%) | 0.252 | 27/107 (25%) | 22/107 (21%) |
+| google/gemma-4-E2B-it | 107 | 0.387 | 0.303 | 0.911 | 0.976 | 18/107 (17%) | 0.143 | 17/107 (16%) | 11/107 (10%) |
+| google/gemma-4-E4B-it | 107 | 0.329 | 0.232 | 0.898 | 0.969 | 9/107 (8%) | 0.072 | 7/107 (7%) | 7/107 (7%) |
+| qwen36_27b_cand1 | 107 | 0.634 | 0.597 | 0.900 | 0.955 | 60/107 (56%) | 0.511 | 56/107 (52%) | **48/107 (45%)** |
+| qwen36_27b_cand2 | 107 | 0.633 | 0.603 | 0.905 | 0.961 | 62/107 (58%) | 0.511 | 54/107 (50%) | **48/107 (45%)** |
+| qwen36_27b_cand3 | 107 | 0.621 | 0.585 | 0.892 | 0.958 | 59/107 (55%) | 0.483 | 51/107 (48%) | 45/107 (42%) |
+| Qwen/Qwen3.5-27B | 107 | 0.624 | 0.592 | 0.858 | 0.952 | 60/107 (56%) | 0.480 | 52/107 (49%) | 42/107 (39%) |
+| Qwen/Qwen3.6-27B | 107 | **0.645** | **0.609** | **0.910** | 0.958 | **62/107 (58%)** | **0.511** | **55/107 (51%)** | 47/107 (44%) |
 
 Metric definitions (from the claw-eval paper):
 - **Avg Score** — mean task score across all 3 trials (0–1); missing trials padded with 0
