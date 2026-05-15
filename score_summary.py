@@ -207,9 +207,11 @@ def analyze_model(model_name: str, trace_dir: Path, task_filter=None) -> dict:
         # Pad with 0.0 for missing/errored trials up to EXPECTED_TRIALS
         scores = raw_scores + [0.0] * max(0, EXPECTED_TRIALS - n_graded)
         avg = sum(scores) / EXPECTED_TRIALS
+        n_passing = sum(1 for s in scores if s >= PASS_THRESHOLD)
         avg_pass = avg >= PASS_THRESHOLD
-        any_pass = any(s >= PASS_THRESHOLD for s in scores)
-        all_pass = all(s >= PASS_THRESHOLD for s in scores)
+        any_pass   = n_passing >= 1                  # Pass@1
+        at_least_2 = n_passing >= 2                  # Pass^2
+        all_pass   = n_passing == EXPECTED_TRIALS    # Pass^3
         task_results[tid] = {
             "scores": scores,
             "n_graded": n_graded,
@@ -218,6 +220,7 @@ def analyze_model(model_name: str, trace_dir: Path, task_filter=None) -> dict:
             "avg_score": avg,
             "avg_pass": avg_pass,
             "any_pass": any_pass,
+            "at_least_2": at_least_2,
             "all_pass": all_pass,
         }
 
@@ -225,11 +228,25 @@ def analyze_model(model_name: str, trace_dir: Path, task_filter=None) -> dict:
     n_tasks = len(task_results)
     n_avg_pass = sum(1 for t in task_results.values() if t["avg_pass"])
     n_any_pass = sum(1 for t in task_results.values() if t["any_pass"])
+    n_at_least_2 = sum(1 for t in task_results.values() if t["at_least_2"])
     n_all_pass = sum(1 for t in task_results.values() if t["all_pass"])
     overall_avg = (
         sum(t["avg_score"] for t in task_results.values()) / n_tasks
         if n_tasks else 0.0
     )
+    # Pass^1: per-trial pass rate (fraction of all trials scoring >= threshold)
+    total_passing_trials = sum(
+        sum(1 for s in t["scores"] if s >= PASS_THRESHOLD)
+        for t in task_results.values()
+    )
+    total_trials = n_tasks * EXPECTED_TRIALS
+    pass1_rate = total_passing_trials / total_trials if total_trials else 0.0
+
+    # Per-metric averages (leaderboard-compatible: Completion, Robustness, Safety)
+    all_trials = [t for trials in task_trials.values() for t in trials]
+    avg_completion  = sum(t.get("completion",  0.0) for t in all_trials) / len(all_trials) if all_trials else 0.0
+    avg_robustness  = sum(t.get("robustness",  0.0) for t in all_trials) / len(all_trials) if all_trials else 0.0
+    avg_safety      = sum(t.get("safety",      1.0) for t in all_trials) / len(all_trials) if all_trials else 1.0
 
     return {
         "model": model_name,
@@ -238,11 +255,17 @@ def analyze_model(model_name: str, trace_dir: Path, task_filter=None) -> dict:
         "graded_files": graded_files,
         "n_tasks": n_tasks,
         "overall_avg_score": overall_avg,
+        "avg_completion": avg_completion,
+        "avg_robustness": avg_robustness,
+        "avg_safety": avg_safety,
         "n_avg_pass": n_avg_pass,
         "n_any_pass": n_any_pass,
+        "n_at_least_2": n_at_least_2,
         "n_all_pass": n_all_pass,
+        "pass1_rate": pass1_rate,
         "avg_pass_rate": n_avg_pass / n_tasks if n_tasks else 0.0,
         "any_pass_rate": n_any_pass / n_tasks if n_tasks else 0.0,
+        "at_least_2_rate": n_at_least_2 / n_tasks if n_tasks else 0.0,
         "all_pass_rate": n_all_pass / n_tasks if n_tasks else 0.0,
         "tasks": task_results,
         "task_trials": dict(task_trials),
@@ -378,17 +401,26 @@ def main():
         all_results.append(result)
 
     # ── Leaderboard ──
-    all_results.sort(key=lambda r: r["overall_avg_score"], reverse=True)
+    all_results.sort(key=lambda r: r["model"])
 
-    print(f"{'Model':<30s} {'Tasks':>5s} {'AvgScore':>8s} │ {'AvgPass':>8s} {'AnyPass':>8s} {'AllPass':>8s}")
-    print("─" * 85)
+    print(f"{'Model':<30s} {'Tasks':>5s} {'AvgScore':>8s} {'Compl':>6s} {'Robust':>6s} {'Safety':>6s} │ {'Pass@1':>6s} {'Pass^1':>6s} {'Pass^2':>6s} {'Pass^3':>6s}")
+    print("─" * 111)
     for r in all_results:
+        n = r["n_tasks"]
         print(
-            f"{r['model']:<30s} {r['n_tasks']:>5d} {r['overall_avg_score']:>8.3f} │ "
-            f"{r['n_avg_pass']:>3d}/{r['n_tasks']:<3d} "
-            f"{r['n_any_pass']:>3d}/{r['n_tasks']:<3d} "
-            f"{r['n_all_pass']:>3d}/{r['n_tasks']:<3d}"
+            f"{r['model']:<30s} {n:>5d} {r['overall_avg_score']:>8.3f} "
+            f"{r['avg_completion']:>6.3f} {r['avg_robustness']:>6.3f} {r['avg_safety']:>6.3f} │ "
+            f"{r['n_any_pass']:>3d}/{n:<3d} "
+            f"{r['pass1_rate']:>6.3f} "
+            f"{r['n_at_least_2']:>3d}/{n:<3d} "
+            f"{r['n_all_pass']:>3d}/{n:<3d}"
         )
+
+    print()
+    print(f"Pass@1 = tasks where ≥1 of {EXPECTED_TRIALS} trials scored ≥ {PASS_THRESHOLD}  (optimistic; upper bound on capability)")
+    print(f"Pass^1 = per-trial pass rate: total passing trials / (n_tasks × {EXPECTED_TRIALS})  (differs from Pass@1 when n_trials > 1)")
+    print(f"Pass^2 = tasks where ≥2 of {EXPECTED_TRIALS} trials passed")
+    print(f"Pass^3 = tasks where all {EXPECTED_TRIALS} trials passed  (strict reliability)")
 
     # ── Anomaly report ──
     has_anomaly = False

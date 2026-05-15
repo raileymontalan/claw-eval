@@ -10,7 +10,6 @@ uv.lock
 
 # Traces (generated output, don't commit)
 model_traces/
-traces/
 traces_*/
 .vscode/
 CLAUDE.md
@@ -36,3 +35,7 @@ scripts/
 regrade/
 yqb_temp/
 others/
+
+# Include score summaries
+traces/*
+!traces/score_summary.json

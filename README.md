@@ -15,85 +15,112 @@ Claw-Eval benchmarks autonomous agents on 300 human-verified real-world tasks ac
 
 ## Quick Start
 
+### 1. Install (one-time, GPU node required)
+
 ```bash
-pip install uv
-uv venv --python 3.11
-source .venv/bin/activate
-uv pip install -e ".[vllm]"
+sbatch setup_env.slurm
 ```
 
-Works with CUDA 13 (loaded automatically in the SLURM script).
+Check `logs/setup_<jobid>.out` for completion. Creates `.venv/` with claw-eval + vLLM. A GPU node is required — vLLM compiles CUDA kernels on first install.
 
-### Running on SLURM
+### 2. Add models to evaluate
 
-Use `submit_claweval.sh` to submit jobs. It reads model settings from `config_vllm.yaml` and automatically sets the correct GPU count:
+Edit `config_vllm.yaml`:
+
+```yaml
+eval:
+  default_model: Qwen/Qwen3.6-27B   # ← change this to switch default
+
+models:
+  Qwen/Qwen3.6-27B:
+    tp: 1
+    enable_thinking: true
+    reasoning_parser: qwen3
+    tool_call_parser: qwen3_coder
+
+  # Example: add a new model
+  Your/Model-Name:
+    tp: 1
+    enable_thinking: true
+    tool_call_parser: qwen3_coder   # check vLLM docs for your model
+    reasoning_parser: qwen3
+```
+
+`tp` = tensor parallel size (number of GPUs). The submit script reads this to request the right GPU count automatically.
+
+### 3. Submit
 
 ```bash
-# Default model (from config_vllm.yaml eval.default_model)
+# Default model from config_vllm.yaml
 ./submit_claweval.sh
 
 # Specific model
-./submit_claweval.sh Qwen/Qwen3-32B
-
-# Benchmark overrides via env vars
-PARALLEL=4 TRIALS=1 ./submit_claweval.sh Qwen/Qwen3.6-27B
+./submit_claweval.sh Qwen/Qwen3.6-27B
 
 # Chinese tasks only
 LANGUAGE=zh ./submit_claweval.sh
+
+# Smoke test
+PARALLEL=4 TRIALS=1 ./submit_claweval.sh Qwen/Qwen3.6-27B
 ```
 
-To add a new model, add an entry to `config_vllm.yaml` under `models:`:
+Logs: `logs/claweval_<jobid>.out`
 
-```yaml
-models:
-  Your/Model-Name:
-    tp: 1                        # number of GPUs (tensor parallel size)
-    enable_thinking: true        # false to disable thinking tokens
-    tool_call_parser: qwen3_coder  # vLLM tool call parser; check vLLM docs for your model
-    reasoning_parser: qwen3      # vLLM reasoning parser; omit or leave empty if not applicable
-```
+Both splits (T* general, C* multi-turn) run sequentially into the same `OUTPUT_DIR`. Re-runs automatically use `--continue` to skip completed trials.
 
-No SLURM changes needed. Submit with `./submit_claweval.sh Your/Model-Name`.
-
-| Variable          | Default                        | Source                          | Description                                              |
-| ----------------- | ------------------------------ | ------------------------------- | -------------------------------------------------------- |
-| `MODEL`           | `Qwen/Qwen3.6-27B`             | `config_vllm.yaml` → submit arg | HuggingFace model ID under evaluation                    |
-| `MODEL_TP`        | `1`                            | `config_vllm.yaml models[MODEL].tp` | Tensor parallel size — set per model in config      |
-| `JUDGE_MODEL`     | `openai/gpt-oss-120b`          | `config_vllm.yaml eval.judge_model` | Judge + user-agent model                            |
-| `JUDGE_TP`        | `1`                            | `config_vllm.yaml eval.judge_tp` | Tensor parallel size for judge                         |
-| `PARALLEL`        | `8`                            | `config_vllm.yaml eval.parallel` | Concurrent claw-eval workers                           |
-| `TRIALS`          | `3`                            | `config_vllm.yaml eval.trials` | Independent trials per task (Pass^k metric)              |
-| `LANGUAGE`        | `en`                           | `config_vllm.yaml eval.language` | Filter by language (`en`/`zh`). Empty = all.           |
-| `OUTPUT_DIR`      | `traces/<model basename>`      | SLURM script                    | Trace output directory                                   |
-
-Traces are saved to `OUTPUT_DIR/`. Both splits write to the same directory so the final summary covers completed tasks. Re-runs use `--continue` to skip already-completed trials.
+| Variable          | Default                        | Source                              | Description                                              |
+| ----------------- | ------------------------------ | ----------------------------------- | -------------------------------------------------------- |
+| `MODEL`           | `Qwen/Qwen3.6-27B`             | `config_vllm.yaml` → submit arg     | HuggingFace model ID under evaluation                    |
+| `MODEL_TP`        | `1`                            | `config_vllm.yaml models[MODEL].tp` | Tensor parallel size — set per model in config           |
+| `JUDGE_MODEL`     | `openai/gpt-oss-120b`          | `config_vllm.yaml eval.judge_model` | Judge + user-agent model                                 |
+| `JUDGE_TP`        | `1`                            | `config_vllm.yaml eval.judge_tp`    | Tensor parallel size for judge                           |
+| `PARALLEL`        | `8`                            | `config_vllm.yaml eval.parallel`    | Concurrent claw-eval workers                             |
+| `TRIALS`          | `3`                            | `config_vllm.yaml eval.trials`      | Independent trials per task (Pass^3 metric)              |
+| `LANGUAGE`        | `en`                           | `config_vllm.yaml eval.language`    | Filter by language (`en`/`zh`). Empty = all.             |
+| `OUTPUT_DIR`      | `traces/<model basename>`      | SLURM script                        | Trace output directory                                   |
 
 ## Results
 
 After the job finishes, the SLURM script runs `score_summary.py` on the trace directory. Output is printed to the job log and saved to `OUTPUT_DIR/score_summary.json`.
-
-**Console output:**
-
-```
-Found 1 models under traces/Qwen3.6-27B
-
-Model                          Tasks AvgScore │  AvgPass  AnyPass  AllPass
-─────────────────────────────────────────────────────────────────────────────────────
-Qwen3.6-27B                      199    0.723 │ 144/199  160/199  128/199
-```
-
-- **AvgScore** — mean task score across all trials (0–1)
-- **AvgPass** — tasks where the average score ≥ 0.75 (Pass^k denominator)
-- **AnyPass** — tasks where at least one trial passed (pass@1 optimistic)
-- **AllPass** — tasks where all trials passed (pass@k pessimistic)
-
-Tasks with fewer than 3 graded trials or error traces are listed separately as anomalies. Re-run them with `--continue` to fill in missing trials.
 
 To re-score manually:
 
 ```bash
 .venv/bin/python score_summary.py traces/Qwen3.6-27B
 ```
+
+### AISG evaluation results (general split, T* tasks)
+
+Scores below are for the general (T\*) split only — 105 tasks completed per model. Multi-turn (C\*) tasks write to the same trace directory; run `score_summary.py traces/<model>` to include them once complete.
+
+Columns match the official [claw-eval leaderboard](https://claw-eval.github.io/) definitions. Models ordered alphabetically.
+
+| Model | Tasks | Avg Score | Completion | Robustness | Safety | Pass@1 | Pass^1 | Pass^2 | Pass^3 |
+|-------|:-----:|:---------:|:----------:|:----------:|:------:|:------:|:------:|:------:|:------:|
+| google/gemma-4-31B-it | 107 | 0.522 | 0.457 | 0.864 | 0.981| 32/107 (30%) | 0.252 | 27/107 (25%) | 22/107 (21%) |
+| google/gemma-4-E2B-it | 105 | 0.390 | 0.306 | 0.920 | **0.976** | 18/105 (17%) | 0.146 | 17/105 (16%) | 11/105 (10%) |
+| google/gemma-4-E4B-it | 105 | 0.330 | 0.232 | 0.906 | 0.969 | 9/105 (9%) | 0.073 | 7/105 (7%) | 7/105 (7%) |
+| Qwen/Qwen3.5-27B | 105 | 0.630 | 0.607 | 0.876 | 0.950 | 60/105 (57%) | 0.489 | 52/105 (50%) | 42/105 (40%) |
+| Qwen/Qwen3.6-27B | 105 | **0.649** | **0.613** | 0.918 | 0.958 | 62/105 (59%) | **0.521** | **55/105 (52%)** | **47/105 (45%)** |
+
+\* gemma-4-31B-it incomplete (56/105 tasks). Re-run: `./submit_claweval.sh google/gemma-4-31B-it`
+
+Metric definitions (from the claw-eval paper):
+- **Avg Score** — mean task score across all 3 trials (0–1); missing trials padded with 0
+- **Completion** — task objective satisfaction weighted by rubric item importance
+- **Robustness** — fraction of injected-error tool types that subsequently recovered (1.0 if no errors injected)
+- **Safety** — multiplicative gate penalising policy violations; avoidance of harmful/unauthorised actions
+- **Pass@1** — tasks where ≥1 of 3 trials scored ≥ 0.75 (optimistic; upper bound on capability)
+- **Pass^1** — per-trial pass rate: fraction of all task-trial pairs scoring ≥ 0.75
+- **Pass^2** — tasks where ≥2 of 3 trials scored ≥ 0.75
+- **Pass^3** — tasks where all 3 trials scored ≥ 0.75 (strict reliability; primary leaderboard metric)
+
+Tasks with fewer than 3 graded trials or error traces are listed as anomalies in the score_summary output. Re-run with `--continue` to fill in missing trials.
+
+> **Known limitation — officeqa tasks T074–T085 (context overflow):**
+> These 12 tasks pass large OCR documents (~778 KB / ~195K tokens for T085) as tool responses, exceeding the 131K–262K context limits of all evaluated models. Every trial fails with HTTP 400 context length exceeded. This is intentional — we do not truncate task inputs to stay close to the upstream evaluation design. These tasks are excluded from the scores above and will remain at 0 for all models until larger context windows are available.
+
+
 
 ## Reference
 

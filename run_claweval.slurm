@@ -75,7 +75,7 @@
 #SBATCH --mem=256G
 #SBATCH --gres=gpu:2
 #SBATCH --time=24:00:00
-#SBATCH --nodelist=smc-pod-[3,5,8]
+#SBATCH --nodelist=smc-pod-[14,8,5]
 #SBATCH --output=logs/claweval_%j.out
 #SBATCH --error=logs/claweval_%j.out
 
@@ -127,6 +127,7 @@ thinking = mcfg.get("enable_thinking", True)
 print(f'_MODEL_THINKING={"true" if thinking else "false"}')
 print(f'_TOOL_CALL_PARSER={shlex.quote(str(mcfg.get("tool_call_parser", "")))}')
 print(f'_REASONING_PARSER={shlex.quote(str(mcfg.get("reasoning_parser", "")))}')
+print(f'_MODEL_PATH={shlex.quote(str(mcfg.get("model_path", model)))}')
 PYEOF
 ) || exit 1
 eval "$_model_vars"
@@ -136,6 +137,8 @@ MODEL_PORT=${MODEL_PORT:-$(free_port)}
 ENABLE_THINKING=${ENABLE_THINKING:-${_MODEL_THINKING:-"true"}}
 TOOL_CALL_PARSER=${TOOL_CALL_PARSER:-${_TOOL_CALL_PARSER:-""}}
 REASONING_PARSER=${REASONING_PARSER:-${_REASONING_PARSER:-""}}
+MODEL_PATH=${MODEL_PATH:-${_MODEL_PATH:-"${MODEL}"}}
+MODEL_BASENAME="$(echo "${MODEL}" | awk -F/ '{print $NF}')"
 
 # Load judge and eval defaults from config
 eval "$(python3 - <<'PYEOF'
@@ -157,7 +160,7 @@ JUDGE_PORT=${JUDGE_PORT:-$(free_port)}
 PARALLEL=${PARALLEL:-${_PARALLEL:-"8"}}
 TRIALS=${TRIALS:-${_TRIALS:-"3"}}
 LANGUAGE=${LANGUAGE:-${_LANGUAGE:-"en"}}
-OUTPUT_DIR=${OUTPUT_DIR:-"traces/$(echo ${MODEL} | awk -F/ '{print $NF}')"}
+OUTPUT_DIR=${OUTPUT_DIR:-"traces/${MODEL_BASENAME}"}
 
 # GPU UUID → index mapping
 UUIDS=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n')
@@ -187,9 +190,11 @@ if [ ${#VISIBLE_DEVICES[@]} -eq 0 ] && [ -n "$CUDA_VISIBLE_DEVICES" ]; then
     IFS=',' read -ra VISIBLE_DEVICES <<< "$CUDA_VISIBLE_DEVICES"
 fi
 
-GPU0=${VISIBLE_DEVICES[0]:-0}
-GPU1=${VISIBLE_DEVICES[1]:-1}
-GPU2=${VISIBLE_DEVICES[2]:-2}
+# Partition GPUs: first MODEL_TP for agent, next JUDGE_TP for judge
+MODEL_GPUS=$(IFS=','; echo "${VISIBLE_DEVICES[*]:0:${MODEL_TP}}")
+MODEL_GPUS=${MODEL_GPUS:-0}
+JUDGE_GPUS=$(IFS=','; echo "${VISIBLE_DEVICES[*]:${MODEL_TP}:${JUDGE_TP}}")
+JUDGE_GPUS=${JUDGE_GPUS:-1}
 
 THINKING_FLAG=""
 if [[ "$(echo "$ENABLE_THINKING" | tr '[:upper:]' '[:lower:]')" == "false" ]]; then
@@ -203,13 +208,12 @@ fi
 
 # Start agent model vLLM server
 echo "Starting agent vLLM server: ${MODEL} on port ${MODEL_PORT} (TP=${MODEL_TP})..."
-CUDA_VISIBLE_DEVICES=${GPU0} .venv/bin/vllm serve "${MODEL}" \
+CUDA_VISIBLE_DEVICES=${MODEL_GPUS} .venv/bin/vllm serve "${MODEL_PATH}" \
     --port "${MODEL_PORT}" \
     --tensor-parallel-size "${MODEL_TP}" \
+    --served-model-name "${MODEL_BASENAME}" \
     --dtype bfloat16 \
-    --max-model-len 32768 \
     --gpu-memory-utilization 0.85 \
-    --attention-backend FLASH_ATTN \
     --enable-prefix-caching \
     --enable-auto-tool-choice \
     --tool-call-parser "${TOOL_CALL_PARSER}" \
@@ -230,12 +234,11 @@ echo "Agent model vLLM server ready."
 
 # Start judge model vLLM server
 echo "Starting judge vLLM server: ${JUDGE_MODEL} on port ${JUDGE_PORT} (TP=${JUDGE_TP})..."
-CUDA_VISIBLE_DEVICES=${GPU1} .venv/bin/vllm serve "${JUDGE_MODEL}" \
+CUDA_VISIBLE_DEVICES=${JUDGE_GPUS} .venv/bin/vllm serve "${JUDGE_MODEL}" \
     --port "${JUDGE_PORT}" \
     --tensor-parallel-size "${JUDGE_TP}" \
     --served-model-name "$(echo ${JUDGE_MODEL} | sed 's|openai/||')" \
     --dtype bfloat16 \
-    --max-model-len 32768 \
     --enable-prefix-caching &
 JUDGE_PID=$!
 
@@ -276,7 +279,7 @@ fi
 
 .venv/bin/claw-eval batch \
     --config config_vllm.yaml \
-    --model "${MODEL}" \
+    --model "${MODEL_BASENAME}" \
     --api-key dummy \
     --base-url "http://localhost:${MODEL_PORT}/v1" \
     --judge-model "${JUDGE_NAME}" \
@@ -294,7 +297,7 @@ echo "Running claw-eval batch (multi_turn split: C* tasks)..."
 
 .venv/bin/claw-eval batch \
     --config config_vllm.yaml \
-    --model "${MODEL}" \
+    --model "${MODEL_BASENAME}" \
     --api-key dummy \
     --base-url "http://localhost:${MODEL_PORT}/v1" \
     --judge-model "${JUDGE_NAME}" \
