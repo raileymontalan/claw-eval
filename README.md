@@ -98,11 +98,25 @@ Columns match the official [claw-eval leaderboard](https://claw-eval.github.io/)
 | google/gemma-4-31B-it | 107 | 0.522 | 0.457 | 0.864 | **0.981** | 32/107 (30%) | 0.252 | 27/107 (25%) | 22/107 (21%) |
 | google/gemma-4-E2B-it | 107 | 0.387 | 0.303 | 0.911 | 0.976 | 18/107 (17%) | 0.143 | 17/107 (16%) | 11/107 (10%) |
 | google/gemma-4-E4B-it | 107 | 0.329 | 0.232 | 0.898 | 0.969 | 9/107 (8%) | 0.072 | 7/107 (7%) | 7/107 (7%) |
+| qwen36_27b_arcee *(partial)* | 6 | 0.656 | 0.570 | 1.000 | 1.000 | 3/6 (50%) | 0.333 | 2/6 (33%) | 1/6 (17%) |
 | qwen36_27b_cand1 | 107 | 0.634 | 0.597 | 0.900 | 0.955 | 60/107 (56%) | 0.511 | 56/107 (52%) | **48/107 (45%)** |
 | qwen36_27b_cand2 | 107 | 0.633 | 0.603 | 0.905 | 0.961 | 62/107 (58%) | 0.511 | 54/107 (50%) | **48/107 (45%)** |
 | qwen36_27b_cand3 | 107 | 0.621 | 0.585 | 0.892 | 0.958 | 59/107 (55%) | 0.483 | 51/107 (48%) | 45/107 (42%) |
 | Qwen/Qwen3.5-27B | 107 | 0.624 | 0.592 | 0.858 | 0.952 | 60/107 (56%) | 0.480 | 52/107 (49%) | 42/107 (39%) |
 | Qwen/Qwen3.6-27B | 107 | **0.645** | **0.609** | **0.910** | 0.958 | **62/107 (58%)** | **0.511** | **55/107 (51%)** | 47/107 (44%) |
+
+`qwen36_27b_arcee` is a short alias for `qwen36_27b_tlmsmytathvi_sparse_reversekl_otr_response_sys_397b_teacher_w_sys_4000_arcee`.
+
+### Thinking-off (nothink) variants
+
+Partial runs — T* split in progress, C* split not yet started. n_tasks will reach 107 when complete.
+
+| Model | Tasks | Avg Score | Completion | Robustness | Safety | Pass@1 | Pass^1 | Pass^2 | Pass^3 |
+|-------|:-----:|:---------:|:----------:|:----------:|:------:|:------:|:------:|:------:|:------:|
+| google/gemma-4-31B-it_nothink *(partial)* | 50 | 0.516 | 0.514 | 0.932 | 0.955 | 17/50 (34%) | 0.273 | 14/50 (28%) | 10/50 (20%) |
+| qwen36_27b_cand1_nothink *(partial)* | 90 | 0.560 | 0.565 | 0.871 | 0.951 | 42/90 (47%) | 0.407 | 35/90 (39%) | 33/90 (37%) |
+| qwen36_27b_cand2_nothink *(partial)* | 93 | 0.572 | 0.574 | 0.854 | 0.965 | 45/93 (48%) | 0.423 | 39/93 (42%) | 34/93 (37%) |
+| qwen36_27b_cand3_nothink *(partial)* | 89 | 0.520 | 0.533 | 0.796 | 0.946 | 40/89 (45%) | 0.390 | 33/89 (37%) | 31/89 (35%) |
 
 Metric definitions (from the claw-eval paper):
 - **Avg Score** — mean task score across all 3 trials (0–1); missing trials padded with 0

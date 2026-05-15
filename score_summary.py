@@ -268,7 +268,6 @@ def analyze_model(model_name: str, trace_dir: Path, task_filter=None) -> dict:
         "at_least_2_rate": n_at_least_2 / n_tasks if n_tasks else 0.0,
         "all_pass_rate": n_all_pass / n_tasks if n_tasks else 0.0,
         "tasks": task_results,
-        "task_trials": dict(task_trials),
     }
 
 
@@ -308,7 +307,13 @@ def _build_config_map(traces_root: Path) -> dict[str, str]:
 def _rebuild_batch_files(r: dict) -> None:
     """Rebuild batch_results.json and batch_summary.json from analyzed data."""
     trace_dir = Path(r["trace_dir"])
-    task_trials = r["task_trials"]
+
+    task_trials: dict[str, list[dict]] = defaultdict(list)
+    for f in sorted(trace_dir.glob("*.jsonl")):
+        extracted = _extract_full_trial(f)
+        if extracted:
+            tid, trial = extracted
+            task_trials[tid].append(trial)
 
     results = []
     for tid in sorted(task_trials):
@@ -482,7 +487,7 @@ def main():
 
     # Root: write metrics only (no per-task breakdown) for a compact leaderboard file.
     out_file = root / "score_summary.json"
-    json_results = [{k: v for k, v in r.items() if k != "tasks"} for r in all_results]
+    json_results = [{k: v for k, v in r.items() if k not in ("tasks", "task_trials")} for r in all_results]
     with open(out_file, "w") as f:
         json.dump(json_results, f, indent=2, ensure_ascii=False)
     print(f"\n\nJSON saved to {out_file}")
