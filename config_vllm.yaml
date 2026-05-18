@@ -6,6 +6,22 @@
 # Add new models here to register them for evaluation.
 # model names must match the HuggingFace model ID.
 
+# Runtime sections — base_url and model_id are injected via env vars set by the SLURM script.
+# Values here are never hardcoded; the SLURM exports JUDGE_BASE_URL and JUDGE_NAME.
+model:
+  api_key: dummy
+  context_window: 65536
+  temperature: 0.0
+judge:
+  api_key: dummy
+  base_url: ${JUDGE_BASE_URL}
+  enabled: true
+  model_id: ${JUDGE_NAME}
+user_agent_model:
+  api_key: dummy
+  base_url: ${JUDGE_BASE_URL}
+  model_id: ${JUDGE_NAME}
+
 eval:
   # Model under evaluation (agent)
   default_model: Qwen/Qwen3.6-27B
@@ -140,18 +156,28 @@ models:
     enable_thinking: false
     tool_call_parser: qwen3_coder
 
-# Runtime sections — base_url and model_id are injected via env vars set by the SLURM script.
-# Values here are never hardcoded; the SLURM exports JUDGE_BASE_URL and JUDGE_NAME.
-model:
-  api_key: dummy
-  context_window: 65536
-  temperature: 0.0
-judge:
-  api_key: dummy
-  base_url: ${JUDGE_BASE_URL}
-  enabled: true
-  model_id: ${JUDGE_NAME}
-user_agent_model:
-  api_key: dummy
-  base_url: ${JUDGE_BASE_URL}
-  model_id: ${JUDGE_NAME}
+  aisingapore/gemma4_e2b_cand1:
+    model_path: aisingapore/gemma4_e2b_cand1
+    tp: 1
+    enable_thinking: true
+    reasoning_parser: gemma4
+    tool_call_parser: gemma4
+
+  aisingapore/gemma4_e2b_cand1_nothink:
+    model_path: aisingapore/gemma4_e2b_cand1
+    tp: 1
+    enable_thinking: false
+    tool_call_parser: gemma4
+
+  aisingapore/gemma4_e2b_cand2:
+    model_path: aisingapore/gemma4_e2b_cand2
+    tp: 1
+    enable_thinking: true
+    reasoning_parser: gemma4
+    tool_call_parser: gemma4
+
+  aisingapore/gemma4_e2b_cand2_nothink:
+    model_path: aisingapore/gemma4_e2b_cand2
+    tp: 1
+    enable_thinking: false
+    tool_call_parser: gemma4
