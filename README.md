@@ -86,37 +86,44 @@ After the job finishes, the SLURM script runs `score_summary.py` on the trace di
 To re-score manually:
 
 ```bash
-.venv/bin/python score_summary.py traces/Qwen3.6-27B
+srun --gres=gpu:0 --mem=8G .venv/bin/python score_summary.py traces/
 ```
 
 ### AISG evaluation results (T* general + C* multi-turn tasks)
 
-Columns match the official [claw-eval leaderboard](https://claw-eval.github.io/) definitions. Models ordered alphabetically. Candidate models are AISG internal variants of Qwen3.6-27B.
+Columns match the official [claw-eval leaderboard](https://claw-eval.github.io/) definitions. Models ordered alphabetically. Candidate models are AISG internal variants of Qwen3.6-27B. *(partial)* = run incomplete (< 107 tasks).
 
 | Model | Tasks | Avg Score | Completion | Robustness | Safety | Pass@1 | Pass^1 | Pass^2 | Pass^3 |
 |-------|:-----:|:---------:|:----------:|:----------:|:------:|:------:|:------:|:------:|:------:|
-| google/gemma-4-31B-it | 107 | 0.522 | 0.457 | 0.864 | **0.981** | 32/107 (30%) | 0.252 | 27/107 (25%) | 22/107 (21%) |
-| google/gemma-4-E2B-it | 107 | 0.387 | 0.303 | 0.911 | 0.976 | 18/107 (17%) | 0.143 | 17/107 (16%) | 11/107 (10%) |
+| google/gemma-4-31B-it | 107 | 0.522 | 0.457 | 0.864 | 0.981 | 32/107 (30%) | 0.252 | 27/107 (25%) | 22/107 (21%) |
+| google/gemma-4-E2B-it | 107 | 0.387 | 0.303 | 0.912 | 0.976 | 18/107 (17%) | 0.143 | 17/107 (16%) | 11/107 (10%) |
 | google/gemma-4-E4B-it | 107 | 0.329 | 0.232 | 0.898 | 0.969 | 9/107 (8%) | 0.072 | 7/107 (7%) | 7/107 (7%) |
-| qwen36_27b_arcee *(partial)* | 6 | 0.656 | 0.570 | 1.000 | 1.000 | 3/6 (50%) | 0.333 | 2/6 (33%) | 1/6 (17%) |
-| qwen36_27b_cand1 | 107 | 0.634 | 0.597 | 0.900 | 0.955 | 60/107 (56%) | 0.511 | 56/107 (52%) | **48/107 (45%)** |
-| qwen36_27b_cand2 | 107 | 0.633 | 0.603 | 0.905 | 0.961 | 62/107 (58%) | 0.511 | 54/107 (50%) | **48/107 (45%)** |
+| qwen36_27b_arcee | 107 | 0.578 | 0.537 | 0.839 | **0.990** | 57/107 (53%) | 0.402 | 41/107 (38%) | 31/107 (29%) |
+| qwen36_27b_cand1 | 107 | 0.634 | 0.597 | 0.900 | 0.955 | 60/107 (56%) | 0.511 | **56/107 (52%)** | **48/107 (45%)** |
+| qwen36_27b_cand2 | 107 | 0.633 | 0.603 | 0.905 | 0.961 | **62/107 (58%)** | **0.511** | 54/107 (50%) | **48/107 (45%)** |
 | qwen36_27b_cand3 | 107 | 0.621 | 0.585 | 0.892 | 0.958 | 59/107 (55%) | 0.483 | 51/107 (48%) | 45/107 (42%) |
+| qwen36_27b_cand5 *(partial)* | 56 | 0.563 | 0.639 | 0.906 | 0.935 | 26/56 (46%) | 0.429 | 24/56 (43%) | 22/56 (39%) |
 | Qwen/Qwen3.5-27B | 107 | 0.624 | 0.592 | 0.858 | 0.952 | 60/107 (56%) | 0.480 | 52/107 (49%) | 42/107 (39%) |
-| Qwen/Qwen3.6-27B | 107 | **0.645** | **0.609** | **0.910** | 0.958 | **62/107 (58%)** | **0.511** | **55/107 (51%)** | 47/107 (44%) |
+| Qwen/Qwen3.6-27B | 107 | **0.645** | **0.609** | **0.910** | 0.958 | **62/107 (58%)** | **0.511** | 55/107 (51%) | 47/107 (44%) |
 
 `qwen36_27b_arcee` is a short alias for `qwen36_27b_tlmsmytathvi_sparse_reversekl_otr_response_sys_397b_teacher_w_sys_4000_arcee`.
 
 ### Thinking-off (nothink) variants
 
-Partial runs — T* split in progress, C* split not yet started. n_tasks will reach 107 when complete.
+*(partial)* = run incomplete (< 107 tasks). `cand5_nothink` is partial; all others complete.
 
 | Model | Tasks | Avg Score | Completion | Robustness | Safety | Pass@1 | Pass^1 | Pass^2 | Pass^3 |
 |-------|:-----:|:---------:|:----------:|:----------:|:------:|:------:|:------:|:------:|:------:|
-| google/gemma-4-31B-it_nothink *(partial)* | 50 | 0.516 | 0.514 | 0.932 | 0.955 | 17/50 (34%) | 0.273 | 14/50 (28%) | 10/50 (20%) |
-| qwen36_27b_cand1_nothink *(partial)* | 90 | 0.560 | 0.565 | 0.871 | 0.951 | 42/90 (47%) | 0.407 | 35/90 (39%) | 33/90 (37%) |
-| qwen36_27b_cand2_nothink *(partial)* | 93 | 0.572 | 0.574 | 0.854 | 0.965 | 45/93 (48%) | 0.423 | 39/93 (42%) | 34/93 (37%) |
-| qwen36_27b_cand3_nothink *(partial)* | 89 | 0.520 | 0.533 | 0.796 | 0.946 | 40/89 (45%) | 0.390 | 33/89 (37%) | 31/89 (35%) |
+| google/gemma-4-31B-it_nothink | 107 | 0.532 | 0.464 | **0.907** | **0.981** | 34/107 (32%) | 0.268 | 29/107 (27%) | 23/107 (21%) |
+| google/gemma-4-E2B-it_nothink | 107 | 0.339 | 0.242 | 0.905 | 0.973 | 9/107 (8%) | 0.075 | 8/107 (7%) | 7/107 (7%) |
+| google/gemma-4-E4B-it_nothink | 107 | 0.328 | 0.224 | 0.845 | 0.971 | 10/107 (9%) | 0.078 | 8/107 (7%) | 7/107 (7%) |
+| qwen36_27b_arcee_nothink | 107 | 0.561 | 0.515 | 0.850 | 0.946 | 47/107 (44%) | 0.383 | 39/107 (36%) | 37/107 (35%) |
+| qwen36_27b_cand1_nothink | 107 | 0.614 | 0.579 | 0.878 | 0.961 | 54/107 (50%) | 0.455 | 49/107 (46%) | 43/107 (40%) |
+| qwen36_27b_cand2_nothink | 107 | 0.604 | 0.565 | 0.870 | 0.971 | 51/107 (48%) | 0.439 | 47/107 (44%) | 43/107 (40%) |
+| qwen36_27b_cand3_nothink | 107 | **0.629** | **0.600** | 0.893 | 0.955 | **55/107 (51%)** | **0.486** | **54/107 (50%)** | **47/107 (44%)** |
+| qwen36_27b_cand5_nothink *(partial)* | 101 | 0.541 | 0.506 | 0.801 | 0.956 | 41/101 (41%) | 0.363 | 36/101 (36%) | 33/101 (33%) |
+| Qwen/Qwen3.5-27B_nothink | 107 | 0.544 | 0.504 | 0.809 | 0.962 | 47/107 (44%) | 0.374 | 39/107 (36%) | 34/107 (32%) |
+| Qwen/Qwen3.6-27B_nothink | 107 | 0.582 | 0.540 | 0.835 | 0.978 | 51/107 (48%) | 0.396 | 44/107 (41%) | 32/107 (30%) |
 
 Metric definitions (from the claw-eval paper):
 - **Avg Score** — mean task score across all 3 trials (0–1); missing trials padded with 0
