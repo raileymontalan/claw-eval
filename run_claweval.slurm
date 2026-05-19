@@ -329,4 +329,9 @@ echo ""
 echo "=== Results Summary ==="
 .venv/bin/python score_summary.py "${OUTPUT_DIR}" 2>/dev/null || true
 
+# Update top-level aggregate summary across all models
+echo ""
+echo "=== Updating traces/score_summary.json ==="
+.venv/bin/python score_summary.py traces/ 2>/dev/null || true
+
 exit $EXIT_CODE
