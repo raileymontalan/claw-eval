@@ -75,7 +75,7 @@
 #SBATCH --mem=256G
 #SBATCH --gres=gpu:2
 #SBATCH --time=48:00:00
-#SBATCH --nodelist=smc-pod-[10,9,8,5,3]
+#SBATCH --nodelist=smc-pod-[14,10,9,8,5,3]
 #SBATCH --output=logs/claweval_%j.out
 #SBATCH --error=logs/claweval_%j.out
 
@@ -333,5 +333,8 @@ echo "=== Results Summary ==="
 echo ""
 echo "=== Updating traces/score_summary.json ==="
 .venv/bin/python score_summary.py traces/ 2>/dev/null || true
+
+echo ""
+printf "=== Job Runtime: %dh %dm %ds ===\n" $((SECONDS/3600)) $(((SECONDS%3600)/60)) $((SECONDS%60))
 
 exit $EXIT_CODE

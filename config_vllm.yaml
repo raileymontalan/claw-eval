@@ -181,3 +181,16 @@ models:
     tp: 1
     enable_thinking: false
     tool_call_parser: gemma4
+
+  aisingapore/gemma4_e2b_cand6:
+    model_path: aisingapore/gemma4_e2b_cand6
+    tp: 1
+    enable_thinking: true
+    reasoning_parser: gemma4
+    tool_call_parser: gemma4
+
+  aisingapore/gemma4_e2b_cand6_nothink:
+    model_path: aisingapore/gemma4_e2b_cand6
+    tp: 1
+    enable_thinking: false
+    tool_call_parser: gemma4
